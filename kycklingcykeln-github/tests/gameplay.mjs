@@ -4,11 +4,11 @@ import vm from 'node:vm';
 import * as THREE from '../dist/vendor/three.module.js';
 const html=fs.readFileSync(new URL('../dist/index.html',import.meta.url),'utf8');
 const ids=new Set([...html.matchAll(/id="([^"]+)"/g)].map(m=>m[1]));
-class Element {paused=true;currentTime=0;play(){this.paused=false;return Promise.resolve();}pause(){this.paused=true;}constructor(){this.style={};this.classList={add(){},remove(){},toggle(){}};}addEventListener(){}setAttribute(){}focus(){}blur(){}closest(){return null;}}
+class Element {value='';children=[];listeners={};replaceChildren(){this.children=[];}appendChild(child){this.children.push(child);}paused=true;currentTime=0;play(){this.paused=false;return Promise.resolve();}pause(){this.paused=true;}constructor(){this.style={};this.classList={add(){},remove(){},toggle(){}};}addEventListener(k,fn){this.listeners[k]=fn;}setAttribute(){}focus(){}blur(){}closest(){return null;}}
 const elements=new Map([...ids].map(id=>[id,new Element()])),events={},storage=new Map([['kycklingcykeln.highscore.meters','500']]);
 let bellOscillators=0;
 class FakeAudio {createMediaElementSource(){return {connect(){}};}state='running';currentTime=0;destination={};resume(){return Promise.resolve();}createOscillator(){bellOscillators++;return {frequency:{setValueAtTime(){}},connect(){},start(){},stop(){},disconnect(){}};}createGain(){return {gain:{setValueAtTime(){},exponentialRampToValueAtTime(){}},connect(){},disconnect(){}};}}
-const context=vm.createContext({THREE,console,HTMLElement:Element,document:{getElementById(id){assert.ok(elements.has(id),`Missing DOM element ${id}`);return elements.get(id);},addEventListener(){},activeElement:null},window:{AudioContext:FakeAudio,addEventListener(k,fn){events[k]=fn;}},localStorage:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v)},setTimeout,requestAnimationFrame(){}});
+const context=vm.createContext({THREE,console,HTMLElement:Element,document:{createElement(){return new Element();},getElementById(id){assert.ok(elements.has(id),`Missing DOM element ${id}`);return elements.get(id);},addEventListener(){},activeElement:null},window:{AudioContext:FakeAudio,addEventListener(k,fn){events[k]=fn;}},localStorage:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v)},setTimeout,requestAnimationFrame(){}});
 const src=fs.readFileSync(new URL('../dist/game.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace(/\ninit\(\);\s*$/,'');
 vm.runInContext(src,context);
 const run=code=>vm.runInContext(code,context);
@@ -130,23 +130,19 @@ reset();run('createRamp(0,-3,true);');assert.equal(run('rocketTime'),0);
 for(let i=0;i<70&&run('rocketTime')===0;i++)run('tickGame(.01);');
 assert.equal(run('rocketTime'),5);assert.equal(run('boostTime'),0);
 assert.equal(run('items.filter(i=>i.rocketFlight).length'),18);
-run('tickGame(.8);doTrick();');assert.ok(run('trickTime')>0);
+run('tickGame(.8);');
 const flightBeforePause=run('rocketTime');run('pause();');assert.equal(run('rocketTime'),flightBeforePause);run('pause();');
-for(let i=0;i<70;i++)run('tickGame(.01);');assert.equal(run('pendingTrickBonus'),10);
-const collectedBeforeLanding=run('seeds');assert.ok(collectedBeforeLanding>0);assert.equal(run('airTricks'),1);
+for(let i=0;i<70;i++)run('tickGame(.01);');
+const collectedBeforeLanding=run('seeds');assert.ok(collectedBeforeLanding>0);
 for(let i=0;i<351;i++)run('tickGame(.01);');
-assert.equal(run('rocketTime'),0);assert.equal(run('jumpHeight'),0);assert.equal(run('seeds'),64,'18 airborne seeds worth three each, plus a landed trick');assert.equal(run('falls'),0);
-assert.equal(run('pendingTrickBonus'),0);assert.equal(run('airTricks'),0);
+assert.equal(run('rocketTime'),0);assert.equal(run('jumpHeight'),0);assert.equal(run('seeds'),54,'18 airborne seeds worth three each');assert.equal(run('falls'),0);
+
 // Flight trail remains reachable when passing a speed tier and when slowmotion expires.
 for(const meters of [480,980,1490,10000]){
  reset();run(`distance=${meters};slowTime=1.3;speed=speedAtDistance(distance);jumpHeight=.9;startRocket();`);
  for(let i=0;i<501;i++)run('tickGame(.01);');
  assert.equal(run('rocketTime'),0);assert.equal(run('seeds'),54,`Reachable rewards at ${meters} m`);
 }
-// Three completed tricks maximum per flight; no ground farming or bonus after a crash.
-reset();run('doTrick();');assert.equal(run('trickTime'),0);
-run('startRocket();tickGame(.8);');for(let i=0;i<4;i++)run('doTrick();tickGame(.65);');assert.equal(run('airTricks'),3);assert.equal(run('pendingTrickBonus'),30);
-run('createObstacle(0,1.6,0);crash(items[items.length-1]);');assert.equal(run('pendingTrickBonus'),0);assert.equal(run('rocketTime'),0);
 // Rare rocket opportunities: minimum distance, 20% random gate, 700 m cooldown.
 reset();run('nextRocketDistance=250;Math.random=()=>.1;distance=249;rowCount=1;spawnRow();');assert.equal(run('items.some(i=>i.rocket)'),false);
 run('distance=250;rowCount=1;spawnRow();');assert.equal(run('items.filter(i=>i.rocket).length'),1);assert.equal(run('nextRocketDistance'),950);
@@ -173,7 +169,7 @@ run("buyEquipment('helmet-red');");assert.equal(run('gear.bank'),20);assert.equa
 run('start();');assert.equal(run('gear.bank'),20);assert.equal(run('gear.helmet'),'helmet-red');assert.equal(run('seeds'),0);
 run('openShop();');assert.equal(run('state'),'paused');assert.equal(elements.get('equipment-panel').hidden,false);run('closeShop();');assert.equal(run('state'),'playing');
 run('pause();openShop();closeShop();');assert.equal(run('state'),'paused','Closing shop preserves a pre-existing pause');
-console.log('Passed: rocket launch and five-second flight, all 54 trail points at changing speeds, airborne tricks and landing rewards, rarity and cooldown, reversed Up/Down, powers, route choice, equipment purchase/persistence and shop pause.');
+console.log('Passed: rocket launch and five-second flight, all 54 trail points at changing speeds, rarity and cooldown, reversed Up/Down, powers, route choice, equipment purchase/persistence and shop pause.');
 
 // v11: a single flight trail, with a reachable handover gap when it changes lanes.
 for(const changes of [false,true]){
@@ -223,3 +219,44 @@ run("gear.helmet='helmet-red';finishRun();");assert.equal(run('endHelmet.materia
 assert.equal(elements.get('final-seeds').textContent,run('seeds'));
 run('start();');assert.equal(elements.get('end-character').hidden,true);assert.equal(run('state'),'playing');
 console.log('Passed: sequential flight trails and lane handover, one-time sheep loss and bouncing seeds, visible magnet travel and one-time scoring, real-model recovery scene, damaged helmet isolation and clean restart.');
+// Single-use protection covers sheep and multiple obstacles for exactly four active seconds.
+reset();run('shieldTime=8;seeds=80;createFlock(-2);createObstacle(0,1.5,0);createBoulder(0,1.5);activateSuperBoost();tickGame(.01);');
+assert.equal(run('falls'),0);assert.equal(run('state'),'playing');assert.equal(run('seeds'),80);assert.ok(run('shieldTime')>7);assert.equal(run('activateSuperBoost()'),false);
+run('pause();tickGame(1);');assert.equal(run('superBoostTime'),3.99);run('pause();');
+run('tickGame(3.98);');assert.ok(run('superBoostTime')>0);run('tickGame(.02);');assert.equal(run('superBoostTime'),0);assert.equal(run('superBoostUsed'),true);
+run('shieldTime=0;invulnerable=0;createObstacle(0,1.5,0);tickGame(.01);');assert.equal(run('falls'),1);
+reset();assert.equal(run('superBoostUsed'),false);assert.equal(run('activateSuperBoost()'),true);
+// All three lanes, including airborne gold seeds, animate into the rider and score once.
+reset();run('activateSuperBoost();createSeed(-2,-4);createSeed(0,-4);createSeed(2,-4,{height:4.95,air:true,value:3});createSeed(0,-4,{dark:true});tickGame(.01);');
+assert.equal(run('items.filter(i=>i.pulling).length'),3);assert.equal(run('seeds'),0);
+for(let i=0;i<60;i++)run('tickGame(.01);');assert.equal(run('seeds'),5);assert.equal(run('reverseTime'),0);
+reset();run('createFlock(-1.2);tickGame(.01);');assert.equal(run('state'),'sheep');run('activateSuperBoost();tickGame(.01);');assert.equal(run('state'),'playing');
+// Double taps ring on touch only; swipes, holds, cancellation and separate taps do not.
+reset();bellOscillators=0;const world=elements.get('world');
+const tap=(t,x=50,type='touch',duration=60)=>{world.listeners.pointerdown({pointerId:1,clientX:x,clientY:50,timeStamp:t,isPrimary:true});world.listeners.pointerup({pointerId:1,clientX:x,clientY:50,timeStamp:t+duration,pointerType:type,preventDefault(){}});};
+tap(100);assert.equal(bellOscillators,0);tap(250);assert.equal(bellOscillators,6);
+run('bellCooldown=0;');tap(1000,50,'mouse');tap(1150,50,'mouse');assert.equal(bellOscillators,6);
+tap(2000);tap(2600);assert.equal(bellOscillators,6);
+world.listeners.pointercancel();tap(3000,50,'touch',400);tap(3450);assert.equal(bellOscillators,6);
+world.listeners.pointercancel();tap(4000);world.listeners.pointerdown({pointerId:1,clientX:50,clientY:50,timeStamp:4150});world.listeners.pointerup({pointerId:1,clientX:110,clientY:50,timeStamp:4200,pointerType:'touch'});tap(4300);assert.equal(bellOscillators,6);
+// Run scores are snapshots, escaped as text, sorted by seeds then distance, saved only once.
+reset();run('seeds=42;distance=987.8;finishRun();');elements.get('player-name').value='<b>Racer</b>';assert.equal(run('saveRunScore()'),true);assert.equal(run('saveRunScore()'),false);
+assert.equal(run('scoreRows[0].name'),'<b>Racer</b>');assert.equal(run('scoreRows[0].seeds'),42);assert.equal(run('scoreRows[0].distance'),987);
+assert.equal(elements.get('scores-body').children[0].children[1].textContent,'<b>Racer</b>');
+assert.ok(storage.get('kycklingcykeln.scores.v1').includes('Racer'));
+assert.equal(run("rankScores([{name:'A',seeds:2,distance:100,time:1},{name:'B',seeds:3,distance:1,time:2},{name:'C',seeds:2,distance:200,time:3}]).map(r=>r.name).join(',')"),'B,C,A');
+run('start();openScores();');assert.equal(run('state'),'paused');assert.equal(elements.get('scores-panel').hidden,false);run('closeScores();');assert.equal(run('state'),'playing');
+const setItem=context.localStorage.setItem;context.localStorage.setItem=()=>{throw new Error('quota');};
+run('seeds=10;distance=20;finishRun();');elements.get('player-name').value='Offline';assert.equal(run('saveRunScore()'),true);assert.ok(elements.get('score-status').textContent.includes('sessionen'));context.localStorage.setItem=setItem;
+// Last finish and best distance are separate markers, persisted and crossed only once.
+reset();run('seeds=3;distance=750.9;finishRun();start();');assert.equal(run('lastRunDistance'),750);assert.equal(storage.get('kycklingcykeln.last-run.meters'),'750');
+assert.equal(run("runMarkers.find(m=>m.label==='Förra rundan').meters"),750);
+run('distance=750;updateRunMarkers();');assert.equal(run("runMarkers.find(m=>m.label==='Förra rundan').crossed"),false);
+run('distance=751;updateRunMarkers();');assert.equal(run("runMarkers.find(m=>m.label==='Förra rundan').crossed"),true);assert.ok(elements.get('feedback').textContent.includes('förra rundans'));
+// Actual model: equipped helmet and bike are reflected immediately on the result screen.
+context.testBike=model.scene.getObjectByName('Cykel');run("buildEndScene(testChick,testBike);gear.helmet='helmet-gold';gear.bike='bike-pink';applyEquipment();");
+assert.equal(run('endHelmet.material.color.getHex()'),0xffc52f);
+assert.ok(run("endGearMeshes.some(g=>g.kind==='bike'&&g.mesh.material.color.getHex()===0xed489e)"));
+run("gear.helmet='helmet-original';syncEndEquipment();");assert.equal(run('endHelmet.material.color.getHex()'),run("endGearMeshes.find(g=>g.kind==='helmet').original.getHex()"));
+assert.equal(src.includes('doTrick'),false);assert.equal(ids.has('trick'),false);
+console.log('Passed: exact four-second reusable-on-restart boost, collisions and sheep immunity, all-lane suction, touch double-tap discrimination, safe ranked score snapshots and persistence failure, markers and full equipped recovery model.');

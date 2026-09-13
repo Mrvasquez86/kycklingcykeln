@@ -13,7 +13,7 @@ function speedAtDistance(meters){const d=Math.max(0,meters);const tenths=d<500?1
 function obstacleGap(meters){return 18+16/(1+Math.max(0,meters)/2200);}
 function secondObstacleChance(meters){return .14+.40*Math.max(0,meters)/(Math.max(0,meters)+3000);}
 function canJumpOver(item,height){return (item.type==='obstacle'||item.type==='boulder')&&height>item.height+.08;}
-function jump(){if(state!=='playing'||jumpHeight>0||jumpVelocity>0)return;rampRide=null;airTricks=0;pendingTrickBonus=0;jumpVelocity=JUMP_SPEED;}
+function jump(){if(state!=='playing'||jumpHeight>0||jumpVelocity>0)return;rampRide=null;jumpVelocity=JUMP_SPEED;}
 
 let reverseTime=0,bellCooldown=0,awaitingFlock=null,nextSheepDistance=400,lastRowDouble=false;
 let boostTime=0,rampRide=null,rowCount=0,skySun,skyMoon,stars,ambientLight,sunLight,fillLight,headlight,lampLens,cloudMaterial;
@@ -101,7 +101,7 @@ function addHeadlight(){
  const lens=mesh(new THREE.CircleGeometry(.115,20),lampLens,cyclist,[2.82,1.78,0]);lens.rotation.y=Math.PI/2;
  headlight=new THREE.SpotLight(0xffefbb,0,36,Math.PI/6,.45,1.25);headlight.position.set(2.86,1.78,0);headlight.target.position.set(17,0,0);cyclist.add(headlight,headlight.target);headlight.visible=false;
 }
-function finishRun(){syncEndEquipment();resetAir();saveGear();state='over';boostTime=0;reverseTime=0;rampRide=null;player.visible=true;checkHighscore();saveHighscore();$('final-distance').textContent=Math.floor(distance);$('final-seeds').textContent=seeds;$('final-best').textContent=highscore;updateHud();setPanels();$('end-restart').focus();}
+function finishRun(){if(state==='over')return;captureRun();syncEndEquipment();superBoostTime=0;resetAir();saveGear();state='over';boostTime=0;reverseTime=0;rampRide=null;player.visible=true;checkHighscore();saveHighscore();$('final-distance').textContent=Math.floor(distance);$('final-seeds').textContent=seeds;$('final-best').textContent=highscore;updateHud();setPanels();$('end-restart').focus();}
 
 const colors={grass:0x75b851,road:0xe7c797,edge:0xd3ae79,leaf:0x468b50,leaf2:0x65a44e,wood:0x895936,gold:0xfacb3b};
 const mat=(color,roughness=.8)=>new THREE.MeshStandardMaterial({color,roughness});
@@ -117,19 +117,20 @@ function setPanels(){
 function notify(text){$('feedback').textContent=text;$('feedback').classList.add('visible');feedbackTime=1.5;}
 function updateHud(){ui.seeds.textContent=seeds;ui.distance.textContent=Math.floor(distance);ui.speed.textContent=(speed/11).toFixed(1)+'×';ui.falls.textContent=falls+' / 3';ui.best.textContent=highscore;ui.boost.hidden=boostTime<=0;ui.boost.textContent='BOOST · '+boostTime.toFixed(1)+' s';ui.jump.disabled=state!=='playing'||jumpHeight>0||jumpVelocity>0;$('left').disabled=$('right').disabled=state!=='playing';ui.reverse.hidden=reverseTime<=0;ui.reverse.textContent='OMVÄND STYRNING · '+reverseTime.toFixed(1)+' s · ↓ hoppar';updateAdventureHud();}
 function start(){
- if(!player)return;unlockSound();backgroundMusic.currentTime=0;$('music-controls').open=false;saveHighscore();recordToBeat=highscore;recordRang=false;
+ if(!player)return;if(scoresOpen)closeScores();unlockSound();backgroundMusic.currentTime=0;$('music-controls').open=false;saveHighscore();recordToBeat=highscore;recordRang=false;
  for(const item of items){scene.remove(item.object);disposeGeometry(item.object);}items=[];
  for(const p of particles){scene.remove(p.object);disposeGeometry(p.object);}particles=[];
  resetAdventure();state='playing';lane=1;playerX=0;elapsed=distance=seeds=falls=0;speed=speedAtDistance(0);spawnTimer=18;invulnerable=0;feedbackTime=0;jumpHeight=jumpVelocity=crashTime=0;recoveryTime=2;firstBoulder=klotNotice=false;boostTime=0;rampRide=null;rowCount=0;reverseTime=0;bellCooldown=0;awaitingFlock=null;nextSheepDistance=350+Math.random()*200;lastRowDouble=false;
- player.visible=true;player.position.set(0,.045,1.6);player.quaternion.copy(rideYaw);if(chicken)chicken.rotation.z=0;
+ resetRunRecords();player.visible=true;player.position.set(0,.045,1.6);player.quaternion.copy(rideYaw);if(chicken)chicken.rotation.z=0;
  updateHud();setPanels();$('vignette').style.opacity=0;$('feedback').classList.remove('visible');clock.getDelta();if(document.activeElement instanceof HTMLElement)document.activeElement.blur();
 }
 function pause(){
- if(shopOpen)return;
+ if(shopOpen||scoresOpen)return;
  if(state==='playing'||state==='crashing'||state==='sheep'){resumeState=state;state='paused';setPanels();$('resume').focus();}
  else if(state==='paused'){state=resumeState;setPanels();clock.getDelta();if(document.activeElement instanceof HTMLElement)document.activeElement.blur();}
 }
 function crash(item){
+ if(superBoostTime>0){item.passed=true;return;}
  resetAir();item.passed=true;falls++;crashTime=0;crashX=playerX;crashStartHeight=jumpHeight;crashSide=playerX>1?-1:1;jumpVelocity=0;state='crashing';player.visible=true;
  rampRide=null;notify(falls>=3?'Tre vurpor. Turen är slut.':'Hoppsan! Upp igen på samma plats.');feedbackTime=CRASH_DURATION;setPanels();updateHud();$('vignette').style.opacity=.8;
 }
@@ -183,7 +184,7 @@ function createSeed(x,z,{dark=false,height=.95,air=false,source=null,flightTime=
 function collectSeed(item){
  if(item.passed)return;
  item.passed=true;item.object.visible=false;
- if(item.dark){reverseTime=3;notify('Svart frö! Styrningen är omvänd i 3 sekunder.');}
+ if(item.dark){if(superBoostTime>0)return;reverseTime=3;notify('Svart frö! Styrningen är omvänd i 3 sekunder.');}
  else {awardSeeds(item.value||1);burst(item.object.position);}
 }
 function seedInReach(item){return item.air?jumpHeight>1.65&&Math.abs(jumpHeight+.95-item.object.position.y)<.65:jumpHeight<1.3;}
@@ -287,7 +288,7 @@ function createRamp(x,z,rocket=false){
 }
 function activateRamp(item){
  item.passed=true;rampRide=null;jumpHeight=Math.max(jumpHeight,item.height);jumpVelocity=9.5;
- airTricks=0;pendingTrickBonus=0;
+
  if(item.rocket){startRocket();return;}
  if(boostTime<=0){boostTime=BOOST_DURATION;notify('Ta fröna i luften! Boost i 3 sekunder.');}
  for(const seed of items)if(seed.rampSource===item&&!seed.passed){const t=seed.flightTime,boosted=Math.min(t,boostTime);seed.object.position.z=1.6-speedAtDistance(distance)*(boosted*BOOST_FACTOR+t-boosted);seed.baseHeight=.95+jumpHeight+9.5*t-.5*GRAVITY*t*t;seed.object.position.y=seed.baseHeight;}
@@ -329,18 +330,18 @@ function spawnRow(overshoot=0){
 }
 function burst(position){for(let i=0;i<9;i++){const o=ball(.045,m.gold,scene,position.toArray(),0);particles.push({object:o,velocity:new THREE.Vector3((Math.random()-.5)*3,1+Math.random()*3,(Math.random()-.5)*3),life:.65});}}
 function tickGame(dt){
+ if(state!=='playing'||dt<=0)return;
+ if(superBoostTime>0&&dt>superBoostTime){const remaining=superBoostTime;tickGame(remaining);if(state==='playing')tickGame(dt-remaining);return;}
  elapsed+=dt;recoveryTime+=dt;tickPowers(dt);bellCooldown=Math.max(0,bellCooldown-dt);reverseTime=Math.max(0,reverseTime-dt);if(reverseTime<1e-8)reverseTime=0;
  boostTime=Math.max(0,boostTime-dt);if(boostTime<1e-8)boostTime=0;
- const targetSpeed=speedAtDistance(distance);speed=targetSpeed*(rocketTime>0?1.25:boostTime>0?BOOST_FACTOR:1)*(slowTime>0?.65:1)*Math.min(1,.35+recoveryTime/1.25*.65);
+ const targetSpeed=speedAtDistance(distance);speed=targetSpeed*(superBoostTime>0?BOOST_FACTOR:rocketTime>0?1.25:boostTime>0?BOOST_FACTOR:1)*(slowTime>0?.65:1)*Math.min(1,.35+recoveryTime/1.25*.65);
  const blockingFlock=items.filter(i=>i.type==='flock'&&!i.passed&&!i.clearing).sort((a,b)=>b.object.position.z-a.object.position.z)[0];
  let stoppedForSheep=false;
- if(blockingFlock){const remaining=Math.max(0,-1.2-blockingFlock.object.position.z);if(speed*dt>=remaining){speed=remaining/dt;stoppedForSheep=true;}}
- distance+=speed*dt;checkHighscore();spawnTimer-=speed*dt;invulnerable=Math.max(0,invulnerable-dt);
+ if(blockingFlock&&superBoostTime<=0){const remaining=Math.max(0,-1.2-blockingFlock.object.position.z);if(speed*dt>=remaining){speed=remaining/dt;stoppedForSheep=true;}}
+ distance+=speed*dt;checkHighscore();updateRunMarkers();spawnTimer-=speed*dt;invulnerable=Math.max(0,invulnerable-dt);
  if(distance>1000&&!klotNotice){klotNotice=true;notify('1 000 meter! Väj för de rullande kloten.');feedbackTime=3;}
- const wasAirborne=jumpHeight>0;
  if(rocketTime>0){rocketTime=Math.max(0,rocketTime-dt);if(rocketTime<1e-8)rocketTime=0;jumpHeight=rocketHeight(5-rocketTime);jumpVelocity=0;if(rocketTime===0){invulnerable=Math.max(invulnerable,.9);spawnTimer=Math.max(spawnTimer,speed*.8);}}
  else if(!rampRide){jumpHeight=Math.max(0,jumpHeight+jumpVelocity*dt-.5*GRAVITY*dt*dt);if(jumpHeight>0)jumpVelocity-=GRAVITY*dt;else jumpVelocity=0;}
- tickTrick(dt);
  updateFlightVisuals(dt);
  const previousPlayerX=playerX;playerX=THREE.MathUtils.damp(playerX,lanes[lane],12,dt);const turn=lanes[lane]-playerX;
  player.position.set(playerX,.045+jumpHeight+(jumpHeight===0?Math.sin(elapsed*12)*.014:0),1.6);
@@ -355,7 +356,7 @@ function tickGame(dt){
   if(item.type==='seed'){o.rotation.y+=dt*1.4;o.position.y=item.baseHeight+(item.air?0:Math.sin(elapsed*3+item.phase)*.1);}
   if(item.type==='boulder')o.rotation.x+=travel/item.radius;
  }
- updateSheep(dt);updateRampRide();updateForks();
+ clearBoostSheep();updateSheep(dt);updateRampRide();updateForks();
  for(const item of items){
   if(['ramp','flock','fork'].includes(item.type))continue;
   if(item.pulling)continue;
@@ -366,15 +367,16 @@ function tickGame(dt){
   if(!item.passed&&overlaps){
    if(item.type==='seed'){if(seedInReach(item))collectSeed(item);}
    else if(item.type==='power'){if(jumpHeight<1.3){takePower(item);}}
+   else if(superBoostTime>0){item.passed=true;item.object.visible=false;}
    else if(shieldTime>0&&!canJumpOver(item,jumpHeight)){shieldTime=0;item.passed=true;item.object.visible=false;invulnerable=Math.max(invulnerable,.8);notify('Skyddsbubblan tog smällen!');}
    else if(invulnerable<=0&&!canJumpOver(item,jumpHeight)){crash(item);break;}
   }
  }
- if(wasAirborne&&jumpHeight===0&&!rampRide&&state==='playing')landTricks();
  if(stoppedForSheep&&state==='playing'){if(rocketTime>0){resetAir();jumpVelocity=0;}state='sheep';speed=0;awaitingFlock=blockingFlock;hitSheep(blockingFlock);setPanels();}
  if(state==='playing')while(spawnTimer<=0){spawnRow(-spawnTimer);spawnTimer+=obstacleGap(distance)*(routeTime>0?(route==='calm'?1.35:.85):1);}
  for(let i=items.length-1;i>=0;i--)if(items[i].object.position.z>13||(['seed','flock','power'].includes(items[i].type)&&items[i].passed)){scene.remove(items[i].object);disposeGeometry(items[i].object);items.splice(i,1);}
  tickParticles(dt);
+ superBoostTime=Math.max(0,superBoostTime-dt);if(superBoostTime<1e-8)superBoostTime=0;
  updateHud();
 }
 function disposeGeometry(obj){obj.traverse(o=>{if(o.geometry)o.geometry.dispose();for(const material of o.userData.ownedMaterials||[])material.dispose();});}
@@ -409,32 +411,43 @@ async function init(){
   const pivot=new THREE.Group();pivot.position.set(x,.64,0);bike.add(pivot);bike.updateMatrixWorld(true);
   const members=[];bike.traverse(o=>{if(o.isMesh&&o.name.includes(name))members.push(o);});for(const o of members)pivot.attach(o);wheels.push(pivot);
  }
- buildEndScene(chick);prepareWings(chick);prepareEquipment();addFlightVisuals();addHeadlight();cyclist.position.x=-1.91;player.rotation.y=Math.PI/2;player.position.set(0,.04,1.6);
+ buildEndScene(chick,bike);prepareWings(chick);prepareEquipment();addFlightVisuals();addHeadlight();cyclist.position.x=-1.91;player.rotation.y=Math.PI/2;player.position.set(0,.04,1.6);
  player.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
  ui.best.textContent=highscore;$('intro-best').textContent=highscore;state='ready';ui.start.disabled=false;ui.start.textContent='Börja cykla';setPanels();
  }catch(error){state='error';ui.intro.hidden=false;ui.start.disabled=false;ui.start.textContent='Försök igen';$('load-error').hidden=false;$('load-error').textContent='Spelet kunde inte laddas. Kontrollera anslutningen och försök igen.';console.error(error);}
 }
 ui.start.addEventListener('click',()=>state==='error'?location.reload():start());$('restart').addEventListener('click',start);$('end-restart').addEventListener('click',start);$('bell').addEventListener('click',e=>{honk();e.currentTarget.blur();});$('jump').addEventListener('click',e=>{jump();e.currentTarget.blur();});ui.pause.addEventListener('click',pause);$('resume').addEventListener('click',pause);$('left').addEventListener('pointerdown',e=>{e.preventDefault();steer(-1);});$('right').addEventListener('pointerdown',e=>{e.preventDefault();steer(1);});
 window.addEventListener('keydown',e=>{
- if(shopOpen)return;
- if(e.key.toLowerCase()==='r'&&!e.repeat){honk();return;}
+ if(shopOpen||scoresOpen)return;
  if(e.target instanceof HTMLElement&&e.target.closest('button,a,input,select,textarea,summary')){if(e.key==='Escape')pause();return;}
+ if(e.key.toLowerCase()==='r'&&!e.repeat){honk();return;}
  if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ','Escape'].includes(e.key))e.preventDefault();if(e.repeat)return;
  if(e.key==='ArrowLeft'||e.key.toLowerCase()==='a')steer(-1);if(e.key==='ArrowRight'||e.key.toLowerCase()==='d')steer(1);
  if(e.key==='Escape'||e.key.toLowerCase()==='p')pause();
- if(e.key.toLowerCase()==='t'){doTrick();return;}
+ if(e.key.toLowerCase()==='b'){activateSuperBoost();return;}
  if(e.key===(reverseTime>0?'ArrowDown':'ArrowUp'))jump();
  if(e.key===' '){if(state==='playing')jump();else if(state==='ready'||state==='over')start();else if(state==='paused')pause();}
  if(e.key==='Enter'&&(state==='ready'||state==='over'))start();
 });
 document.addEventListener('visibilitychange',()=>{if(document.hidden){saveHighscore();if(state==='playing'||state==='crashing'||state==='sheep')pause();}});
-let touchStart=null;$('world').addEventListener('pointerdown',e=>{touchStart={x:e.clientX,y:e.clientY};});$('world').addEventListener('pointerup',e=>{if(touchStart){const dx=e.clientX-touchStart.x,dy=e.clientY-touchStart.y;handleSwipe(dx,dy);touchStart=null;}});
+let touchStart=null,lastTap=null;
+$('world').addEventListener('pointerdown',e=>{if(e.isPrimary===false){touchStart=null;lastTap=null;return;}touchStart={x:e.clientX,y:e.clientY,id:e.pointerId,time:e.timeStamp};});
+$('world').addEventListener('pointerup',handleWorldPointerUp);
+$('world').addEventListener('pointercancel',()=>{touchStart=null;lastTap=null;});
+function handleWorldPointerUp(e){
+ if(!touchStart||e.pointerId!==touchStart.id)return;
+ const start=touchStart;touchStart=null;const dx=e.clientX-start.x,dy=e.clientY-start.y;
+ if(Math.hypot(dx,dy)>20){lastTap=null;handleSwipe(dx,dy);return;}
+ if(e.pointerType!=='touch'||e.timeStamp-start.time>300||!['playing','sheep'].includes(state)){lastTap=null;return;}
+ if(lastTap&&e.timeStamp-lastTap.time<=330&&Math.hypot(e.clientX-lastTap.x,e.clientY-lastTap.y)<45){lastTap=null;e.preventDefault();honk();}
+ else lastTap={x:e.clientX,y:e.clientY,time:e.timeStamp};
+}
 window.addEventListener('pagehide',()=>{saveHighscore();backgroundMusic.pause();});
 $('music-toggle').addEventListener('click',toggleMusic);
 $('music-volume').addEventListener('input',e=>setMusicVolume(e.target.value));
 // Adventure expansion: active-play timers, cosmetic equipment and alternate routes.
 let rocketTime=0,nextRocketDistance=250,magnetTime=0,shieldTime=0,slowTime=0,nextPowerDistance=160;
-let route=null,routeTime=0,nextForkDistance=600,selectedRoute=null,trickTime=0,airTricks=0,pendingTrickBonus=0;
+let route=null,routeTime=0,nextForkDistance=600,selectedRoute=null;
 let flightRocket=null,shieldBubble=null,wingSpread=0,wingPivots=[],gearMeshes=[],shopOpen=false,shopPaused=false;
 const GEAR_KEY='kycklingcykeln.equipment.v1';
 const equipment=[
@@ -467,19 +480,20 @@ function prepareEquipment(){
  if(kind){o.material=o.material.clone();gearMeshes.push({mesh:o,kind,original:o.material.color.clone()});}
  });applyEquipment();
 }
-function applyEquipment(){for(const {mesh,kind,original} of gearMeshes){const e=equipment.find(e=>e.id===gear[kind]);if(e?.cost===0)mesh.material.color.copy(original);else if(e)mesh.material.color.set(e.color);}}
+function applyEquipment(){for(const {mesh,kind,original} of gearMeshes){const e=equipment.find(e=>e.id===gear[kind]);if(e?.cost===0)mesh.material.color.copy(original);else if(e)mesh.material.color.set(e.color);}syncEndEquipment();}
 function renderShop(){
  $('seed-bank').textContent=gear.bank;
  $('shop-status').textContent=storageFailed?'Webbläsaren kunde inte spara. Utrustningen finns kvar under den här spelsessionen.':'Frön och utrustning sparas i den här webbläsaren. Färgerna ändrar inte farten.';
  $('equipment-list').innerHTML=equipment.map(e=>{const owned=gear.owned.includes(e.id),active=gear[e.kind]===e.id;return `<button type="button" data-equipment="${e.id}" aria-pressed="${active}" ${!owned&&gear.bank<e.cost?'disabled':''}><span class="gear-swatch" style="background:#${e.color.toString(16).padStart(6,'0')}"></span><strong>${e.name}</strong><span>${active?'Vald':owned?'Välj':e.cost+' frön · Lås upp'}</span></button>`;}).join('');
 }
 function openShop(){
- if(shopOpen)return;shopPaused=['playing','crashing','sheep'].includes(state);if(shopPaused)pause();shopOpen=true;
+ if(scoresOpen)closeScores();
+ if(shopOpen||scoresOpen)return;shopPaused=['playing','crashing','sheep'].includes(state);if(shopPaused)pause();shopOpen=true;
  renderShop();$('equipment-panel').hidden=false;ui.paused.hidden=true;$('equipment-close').focus();
 }
 function closeShop(){shopOpen=false;$('equipment-panel').hidden=true;if(shopPaused&&state==='paused')pause();else setPanels();if(['playing','crashing','sheep'].includes(state))document.activeElement?.blur();else $('equipment-open').focus();}
-function resetAir(){rocketTime=0;trickTime=0;airTricks=0;pendingTrickBonus=0;if(cyclist)cyclist.rotation.x=0;if(flightRocket)flightRocket.visible=false;}
-function resetAdventure(){if(magnetAura)magnetAura.visible=false;resetAir();magnetTime=shieldTime=slowTime=0;route=null;routeTime=0;selectedRoute=null;nextRocketDistance=250;nextPowerDistance=160;nextForkDistance=600;wingSpread=0;for(const w of wingPivots)w.pivot.rotation.z=0;if(shieldBubble)shieldBubble.visible=false;}
+function resetAir(){rocketTime=0;if(cyclist)cyclist.rotation.x=0;if(flightRocket)flightRocket.visible=false;}
+function resetAdventure(){superBoostTime=0;superBoostUsed=false;lastTap=null;touchStart=null;if(magnetAura)magnetAura.visible=false;resetAir();magnetTime=shieldTime=slowTime=0;route=null;routeTime=0;selectedRoute=null;nextRocketDistance=250;nextPowerDistance=160;nextForkDistance=600;wingSpread=0;for(const w of wingPivots)w.pivot.rotation.z=0;if(shieldBubble)shieldBubble.visible=false;}
 function prepareWings(chick){
  chick.updateWorldMatrix(true,true);
  for(const [prefix,side] of [['Vanster',-1],['Hoger',1]]){
@@ -505,24 +519,19 @@ function addFlightVisuals(){
 }
 function rocketHeight(t){const smooth=u=>{u=THREE.MathUtils.clamp(u,0,1);return u*u*(3-2*u);};return t<.65?.9+3.1*smooth(t/.65):t>4.25?4*(1-smooth((t-4.25)/.75)):4;}
 function startRocket(){
- rocketTime=5;boostTime=0;jumpVelocity=0;airTricks=0;pendingTrickBonus=0;
+ rocketTime=5;boostTime=0;jumpVelocity=0;
  // Air trails use time-to-contact, so distance speed tiers and powers cannot make them unreachable.
  for(const point of rocketTrail(lane)){const t=point.time;createSeed(lanes[point.lane],1.6-speed*t,{height:4.95,air:true,flightTime:t,value:3,rocketFlight:true});}
- notify('Raket! Följ fröspåret · det kan byta fil · T gör trick');feedbackTime=3;
+ notify('Raket! Följ fröspåret · det kan byta fil');feedbackTime=3;
 }
 function updateFlightVisuals(dt){
- if(magnetAura){magnetAura.visible=magnetTime>0;magnetAura.children.forEach((ring,i)=>{ring.scale.setScalar(1+Math.sin(elapsed*5-i*1.5)*.18);ring.rotation.z=elapsed*(i%2?1:-1);});}
- ui.game.classList.toggle('magnet-active',magnetTime>0);
+ if(magnetAura){magnetAura.visible=magnetTime>0||superBoostTime>0;magnetAura.children.forEach((ring,i)=>{ring.scale.setScalar(1+Math.sin(elapsed*5-i*1.5)*.18);ring.rotation.z=elapsed*(i%2?1:-1);});}
+ ui.game.classList.toggle('magnet-active',magnetTime>0||superBoostTime>0);
  wingSpread=THREE.MathUtils.damp(wingSpread,rocketTime>0?1:0,9,dt);
  for(const {pivot,side} of wingPivots)pivot.rotation.z=side*wingSpread*(1.30+Math.sin(elapsed*9)*.08);
  if(flightRocket){flightRocket.visible=rocketTime>0;flightRocket.userData.flame.scale.y=.8+Math.sin(elapsed*35)*.2;}
- if(shieldBubble){shieldBubble.visible=shieldTime>0;shieldBubble.material.opacity=.17+Math.sin(elapsed*4)*.04;}
+ if(shieldBubble){shieldBubble.visible=shieldTime>0||superBoostTime>0;shieldBubble.material.opacity=.17+Math.sin(elapsed*4)*.04;}
 }
-function remainingAirTime(){return rocketTime>0?rocketTime:(jumpVelocity+Math.sqrt(jumpVelocity*jumpVelocity+2*GRAVITY*jumpHeight))/GRAVITY;}
-function canTrick(){return state==='playing'&&!rampRide&&jumpHeight>.65&&remainingAirTime()>.7&&trickTime===0&&airTricks<(rocketTime>0?3:1);}
-function doTrick(){if(!canTrick())return;trickTime=.6;airTricks++;notify('Luftvolt! Landa för +10 frön.');}
-function tickTrick(dt){if(trickTime<=0)return;trickTime=Math.max(0,trickTime-dt);if(trickTime<1e-8)trickTime=0;if(cyclist)cyclist.rotation.x=(1-trickTime/.6)*Math.PI*2;if(trickTime===0){if(cyclist)cyclist.rotation.x=0;pendingTrickBonus+=10;}}
-function landTricks(){if(pendingTrickBonus>0){awardSeeds(pendingTrickBonus);notify('Snygg landning! +'+pendingTrickBonus+' bonusfrön');}trickTime=0;pendingTrickBonus=0;airTricks=0;if(cyclist)cyclist.rotation.x=0;}
 const powerNames={magnet:'Frömagnet',shield:'Skyddsbubbla',slow:'Slowmotion'};
 const powerMaterials={magnet:mat(0xec72ca),shield:mat(0x55c9fb),slow:mat(0x9876ed)};
 function createPower(x,z,kind=['magnet','shield','slow'][Math.floor(Math.random()*3)]){
@@ -554,14 +563,15 @@ function updateForks(){for(const item of items){if(item.type!=='fork'||item.pass
 function updateAdventureHud(){
  const active=['playing','sheep','crashing','paused'].includes(state);
  $('flight-status').hidden=!active||rocketTime<=0;$('flight-status').textContent='RAKET · '+rocketTime.toFixed(1)+' s · luftfrön ger 3 poäng';
- const powers=[magnetTime>0?'Magnet '+magnetTime.toFixed(1)+' s':'',shieldTime>0?'Skydd '+shieldTime.toFixed(1)+' s':'',slowTime>0?'Slowmotion '+slowTime.toFixed(1)+' s':'',routeTime>0?(route==='calm'?'Lugna vägen ':'Äventyrsvägen ')+routeTime.toFixed(0)+' s':''].filter(Boolean);
+ const powers=[superBoostTime>0?'SUPERBOOST '+superBoostTime.toFixed(1)+' s · Skydd + magnet':'',magnetTime>0?'Magnet '+magnetTime.toFixed(1)+' s':'',shieldTime>0?'Skydd '+shieldTime.toFixed(1)+' s':'',slowTime>0?'Slowmotion '+slowTime.toFixed(1)+' s':'',routeTime>0?(route==='calm'?'Lugna vägen ':'Äventyrsvägen ')+routeTime.toFixed(0)+' s':''].filter(Boolean);
  $('power-status').hidden=!active||powers.length===0;$('power-status').textContent=powers.join(' · ');
- $('trick').disabled=!canTrick();$('trick-status').hidden=!active||pendingTrickBonus<=0;$('trick-status').textContent='Landa för +'+pendingTrickBonus+' frön';
+ $('super-boost').disabled=!['playing','sheep'].includes(state)||superBoostUsed;
+ $('super-boost').textContent=superBoostTime>0?'Boost '+superBoostTime.toFixed(1)+' s':superBoostUsed?'Använd':'Boost B';
  const fork=items.find(i=>i.type==='fork'&&!i.passed);$('route-choice').hidden=state!=='playing'||!fork;
  if(fork)$('route-countdown').textContent='Välj fil före porten · '+Math.max(0,(1.6-fork.object.position.z)/Math.max(1,speed)).toFixed(1)+' s';
  $('route-calm').setAttribute('aria-pressed',String(lane===0));$('route-adventure').setAttribute('aria-pressed',String(lane===2));
 }
-$('trick').addEventListener('click',e=>{doTrick();e.currentTarget.blur();});
+$('super-boost').addEventListener('click',e=>{activateSuperBoost();e.currentTarget.blur();});
 $('route-calm').addEventListener('click',e=>{chooseRoute('calm');e.currentTarget.blur();});
 $('route-adventure').addEventListener('click',e=>{chooseRoute('adventure');e.currentTarget.blur();});
 $('equipment-open').addEventListener('click',openShop);$('equipment-close').addEventListener('click',closeShop);
@@ -578,7 +588,7 @@ function rocketTrail(startLane,change=Math.random()<.55){
 }
 function makeSeedVisual(dark=false){const o=new THREE.Group();const seed=ball(.24,dark?m.blackSeed:m.gold,o,[0,0,0],2);seed.scale.set(.67,1.2,.48);const stripe=ball(.19,dark?m.blackStripe:m.stripe,o,[0,0,.105],1);stripe.scale.set(.11,1.15,.14);return o;}
 function hitSheep(flock){
- if(!flock||flock.penalized)return;flock.penalized=true;flock.bumpTime=0;
+ if(!flock||flock.penalized||superBoostTime>0)return;flock.penalized=true;flock.bumpTime=0;
  const lost=Math.min(50,seeds);seeds-=lost;gear.bank=Math.max(0,gear.bank-lost);saveGear();
  for(let i=0;i<lost;i++){
   const o=makeSeedVisual();o.position.set(playerX,1.2,1.6);o.scale.setScalar(.65);scene.add(o);
@@ -595,7 +605,7 @@ function tickParticles(dt){
  }
 }
 let magnetAura=null;
-function canMagnetPull(item){return item.type==='seed'&&!item.passed&&!item.pulling&&!item.dark&&magnetTime>0&&item.object.position.z<4&&item.object.position.z>1.6-Math.max(12,Math.min(28,speed*.65))&&Math.abs(item.object.position.y-(jumpHeight+.95))<1.6;}
+function canMagnetPull(item){return item.type==='seed'&&!item.passed&&!item.pulling&&!item.dark&&(magnetTime>0||superBoostTime>0)&&item.object.position.z<4&&item.object.position.z>1.6-Math.max(12,Math.min(28,speed*.65))&&(superBoostTime>0||Math.abs(item.object.position.y-(jumpHeight+.95))<1.6);}
 function beginSuction(item){if(item.pulling||item.passed)return;item.pulling=true;item.pullTime=0;item.pullFrom=item.object.position.clone();item.pullDuration=.48;}
 function magnetTarget(){if(chicken?.parent){chicken.updateWorldMatrix(true,false);return chicken.localToWorld(new THREE.Vector3(0,1.3,0));}return new THREE.Vector3(playerX,jumpHeight+2.1,1.6);}
 function tickSuction(item,dt){
@@ -604,16 +614,17 @@ function tickSuction(item,dt){
  item.object.position.lerpVectors(item.pullFrom,target,u);item.object.position.y+=Math.sin(t*Math.PI)*.5;item.object.rotation.x+=dt*8;item.object.scale.setScalar(1-.5*u);
  if(t>=1)collectSeed(item);
 }
-let endScene=null,endCamera=null,endChicken=null,endHelmet=null;
+let endScene=null,endCamera=null,endChicken=null,endHelmet=null,endBike=null,endGearMeshes=[];
 function rodBetween(a,b,r,material,parent){const start=new THREE.Vector3(...a),end=new THREE.Vector3(...b);const o=mesh(new THREE.CylinderGeometry(r,r,start.distanceTo(end),12),material,parent,start.clone().add(end).multiplyScalar(.5).toArray());o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),end.sub(start).normalize());return o;}
-function buildEndScene(source){
+function buildEndScene(source,bikeSource=null){
+ endGearMeshes=[];
  endScene=new THREE.Scene();endScene.background=new THREE.Color(0xd9efe5);
  endCamera=new THREE.PerspectiveCamera(35,1,.1,40);endCamera.position.set(0,1.9,7.6);endCamera.lookAt(0,1.55,0);
  endScene.add(new THREE.HemisphereLight(0xfffaf0,0x63938b,2.8));const key=new THREE.DirectionalLight(0xffefd1,3);key.position.set(-3,6,5);endScene.add(key);const fill=new THREE.DirectionalLight(0xe0efff,1.5);fill.position.set(4,3,1);endScene.add(fill);
  endChicken=source.clone(true);endChicken.position.set(1.2,0,0);endChicken.rotation.set(0,0,0);endChicken.scale.setScalar(1);endScene.add(endChicken);
  endChicken.traverse(o=>{if(!o.isMesh)return;o.material=o.material.clone();
   if(o.material.name==='Hjalm - olivgron'){
-   endHelmet=o;o.geometry=o.geometry.clone();o.material.side=THREE.DoubleSide;
+   endGearMeshes.push({mesh:o,kind:'helmet',original:o.material.color.clone()});endHelmet=o;o.geometry=o.geometry.clone();o.material.side=THREE.DoubleSide;
    const g=o.geometry,positions=g.attributes.position,indices=g.index?Array.from(g.index.array):Array.from({length:positions.count},(_,i)=>i),kept=[];
    // A missing jagged front-right section of the helmet, confined to the helmet shell.
    for(let i=0;i<indices.length;i+=3){const ids=indices.slice(i,i+3),x=ids.reduce((v,n)=>v+positions.getX(n),0)/3+1.2,y=ids.reduce((v,n)=>v+positions.getY(n),0)/3,z=ids.reduce((v,n)=>v+positions.getZ(n),0)/3;
@@ -621,6 +632,10 @@ function buildEndScene(source){
    }g.setIndex(kept);g.computeVertexNormals();
   }
  });
+ if(bikeSource){
+  endBike=bikeSource.clone(true);endBike.position.set(-2.5,0,-1.35);endBike.rotation.y=-.22;endBike.scale.setScalar(.65);endScene.add(endBike);
+  endBike.traverse(o=>{if(!o.isMesh)return;o.material=o.material.clone();if(o.material.name==='Cykel - turkos lack')endGearMeshes.push({mesh:o,kind:'bike',original:o.material.color.clone()});});
+ }
  // White gauze wraps the left knee; diagonal seams make the bandage readable.
  const gauze=mat(0xfffcf0),seam=mat(0xbac7c4),rubber=mat(0x365b59),aluminum=mat(0x9fbdbf,.3);
  const knee=mesh(new THREE.CylinderGeometry(.15,.15,.28,24),gauze,endChicken,[-1.51,.44,.065]);knee.rotation.z=-.08;
@@ -638,13 +653,94 @@ function buildEndScene(source){
  for(let i=1;i<cracks.length;i++)rodBetween(cracks[i-1],cracks[i],.022,crackMat,endChicken);
  const shadow=new THREE.Mesh(new THREE.CircleGeometry(1.1,48),new THREE.MeshBasicMaterial({color:0x8bb6a5,transparent:true,opacity:.38}));shadow.rotation.x=-Math.PI/2;shadow.position.set(.1,.012,.08);shadow.scale.set(1,.7,1);endScene.add(shadow);
 }
-function syncEndEquipment(){if(endHelmet){const e=equipment.find(e=>e.id===gear.helmet);endHelmet.material.color.set(e?.color||0x647342);}}
+function syncEndEquipment(){for(const {mesh,kind,original} of endGearMeshes){const selected=equipment.find(e=>e.id===gear[kind]);if(selected?.cost===0)mesh.material.color.copy(original);else if(selected)mesh.material.color.set(selected.color);}}
 function renderEndScene(dt){
  const w=ui.game.clientWidth,h=ui.game.clientHeight,mobile=w<761;
  renderer.setScissorTest(false);renderer.setViewport(0,0,w,h);renderer.setClearColor(endScene.background);renderer.clear();
- const viewport=mobile?{x:0,y:h*.45,w,h:h*.48}:{x:w*.48,y:h*.08,w:w*.50,h:h*.79};
+ const viewport=mobile?{x:0,y:h*.52,w,h:h*.40}:{x:w*.48,y:h*.08,w:w*.50,h:h*.79};
  endCamera.aspect=viewport.w/viewport.h;endCamera.updateProjectionMatrix();
  renderer.setViewport(viewport.x,viewport.y,viewport.w,viewport.h);renderer.setScissor(viewport.x,viewport.y,viewport.w,viewport.h);renderer.setScissorTest(true);renderer.render(endScene,endCamera);renderer.setScissorTest(false);
+}
+
+// One boost per run. Ordinary ramp boosts remain independent.
+let superBoostTime=0,superBoostUsed=false;
+function activateSuperBoost(){
+ if(!['playing','sheep'].includes(state)||superBoostUsed)return false;
+ superBoostUsed=true;superBoostTime=4;reverseTime=0;
+ clearBoostSheep();
+ if(state==='sheep'){awaitingFlock=null;state='playing';recoveryTime=2;setPanels();}
+ updateFlightVisuals(0);updateHud();notify('Superboost! Skydd + frömagnet i 4 sekunder.');return true;
+}
+function clearBoostSheep(){
+ if(superBoostTime<=0)return;
+ for(const flock of items)if(flock.type==='flock'&&!flock.passed&&flock.object.position.z>1.6-Math.max(15,speed)){
+  flock.clearing=true;flock.clearTime=Math.max(flock.clearTime,.35);
+ }
+}
+
+const SCORES_KEY='kycklingcykeln.scores.v1',LAST_RUN_KEY='kycklingcykeln.last-run.meters';
+let scoreRows=loadScores(),finishedRun=null,scoreSaved=false,scoresOpen=false,scoresPaused=false,scoresReturnFocus=null;
+let lastRunDistance=readLastRun(),runMarkers=[];
+function rankScores(rows){return [...rows].sort((a,b)=>b.seeds-a.seeds||b.distance-a.distance||a.time-b.time).slice(0,100);}
+function loadScores(){
+ try{const rows=JSON.parse(localStorage.getItem(SCORES_KEY));return rankScores((Array.isArray(rows)?rows:[]).filter(r=>r&&typeof r.name==='string'&&r.name.trim()&&r.name.length<=24&&Number.isSafeInteger(r.seeds)&&r.seeds>=0&&Number.isSafeInteger(r.distance)&&r.distance>=0&&Number.isFinite(r.time)));}catch{return [];}
+}
+function readLastRun(){try{const value=Number(localStorage.getItem(LAST_RUN_KEY));return Number.isFinite(value)&&value>0?Math.floor(value):0;}catch{return 0;}}
+function captureRun(){
+ finishedRun={seeds,distance:Math.floor(distance),time:Date.now()};scoreSaved=false;
+ lastRunDistance=finishedRun.distance;
+ try{localStorage.setItem(LAST_RUN_KEY,String(lastRunDistance));}catch{}
+ $('score-save').disabled=false;$('player-name').disabled=false;$('score-status').textContent='Skriv ditt namn för att spara rundan i topplistan.';
+}
+function saveRunScore(){
+ if(state!=='over'||!finishedRun||scoreSaved)return false;
+ const name=$('player-name').value.trim().replace(/\s+/g,' ').slice(0,24);
+ if(!name){$('score-status').textContent='Skriv ditt namn först.';$('player-name').focus();return false;}
+ // Merge stored scores so another tab's completed round is not overwritten.
+ const stored=loadScores();const existing=[...stored];
+ for(const row of scoreRows)if(!existing.some(r=>r.name===row.name&&r.time===row.time&&r.seeds===row.seeds&&r.distance===row.distance))existing.push(row);
+ scoreRows=rankScores([...existing,{name,...finishedRun}]);
+ let persisted=true;try{localStorage.setItem(SCORES_KEY,JSON.stringify(scoreRows));}catch{persisted=false;}
+ scoreSaved=true;$('score-save').disabled=true;$('player-name').disabled=true;
+ $('score-status').textContent=persisted?'Sparat! Se din placering i Topplista.':'Kan inte spara i webbläsaren. Resultatet finns i topplistan under den här sessionen.';
+ renderScores();return true;
+}
+function renderScores(){
+ const body=$('scores-body');body.replaceChildren();
+ scoreRows.forEach((row,i)=>{const tr=document.createElement('tr');for(const value of [i+1,row.name,row.seeds,row.distance]){const td=document.createElement('td');td.textContent=String(value);tr.appendChild(td);}body.appendChild(tr);});
+ $('scores-empty').hidden=scoreRows.length>0;
+}
+function openScores(){
+ if(scoresOpen)return;if(shopOpen)closeShop();scoresReturnFocus=document.activeElement;
+ scoresPaused=['playing','crashing','sheep'].includes(state);if(scoresPaused)pause();scoresOpen=true;
+ renderScores();$('scores-panel').hidden=false;ui.paused.hidden=true;$('scores-close').focus();
+}
+function closeScores(){scoresOpen=false;$('scores-panel').hidden=true;if(scoresPaused&&state==='paused')pause();else setPanels();if(['playing','crashing','sheep'].includes(state))document.activeElement?.blur();else scoresReturnFocus?.focus();}
+$('score-form').addEventListener('submit',e=>{e.preventDefault();saveRunScore();});
+$('scores-open').addEventListener('click',openScores);$('scores-close').addEventListener('click',closeScores);
+$('scores-panel').addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();closeScores();}else if(e.key==='Tab'){e.preventDefault();$('scores-close').focus();}});
+
+function resetRunRecords(){
+ finishedRun=null;scoreSaved=false;
+ for(const marker of runMarkers){scene.remove(marker.object);disposeGeometry(marker.object);marker.object.traverse(o=>{if(o.isMesh)o.material.dispose();});}
+ runMarkers=[];
+ for(const [meters,label,color] of [[lastRunDistance,'Förra rundan',0xf07839],[recordToBeat,'Ditt längdrekord',0x17bcb2]]){
+  if(meters<=0)continue;
+  const group=new THREE.Group();
+  box(6,.025,.32,new THREE.MeshBasicMaterial({color,transparent:true,opacity:.8}),group,[0,.03,0]);
+  for(const x of [-3.3,3.3]){box(.06,1.6,.06,m.band.clone(),group,[x,.8,0]);box(.65,.48,.045,new THREE.MeshBasicMaterial({color}),group,[x,1.43,0]);}
+  scene.add(group);runMarkers.push({object:group,meters,label,crossed:false});
+ }
+ updateRunMarkers(false);
+}
+function updateRunMarkers(announce=true){
+ for(const marker of runMarkers){
+  marker.object.position.z=1.6-(marker.meters-distance);marker.object.visible=marker.object.position.z> -100&&marker.object.position.z<12;
+  if(!marker.crossed&&distance>marker.meters){marker.crossed=true;if(announce)notify(marker.label==='Förra rundan'?'Du passerade förra rundans slut!':'Nytt längdrekord!');}
+ }
+ const nearby=runMarkers.filter(m=>!m.crossed&&m.meters-distance<100).sort((a,b)=>a.meters-b.meters);
+ $('marker-status').hidden=nearby.length===0||state!=='playing';
+ $('marker-status').textContent=nearby.map(m=>m.label+': '+m.meters+' m · '+Math.max(0,Math.ceil(m.meters-distance))+' m kvar').join(' / ');
 }
 
 init();

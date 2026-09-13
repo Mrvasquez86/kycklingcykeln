@@ -40,11 +40,11 @@ Obstacle rows get gradually closer with distance, but spacing is now 18 + 16 / (
 
 - Rocket pickups appear on 20% of eligible ramp rows, starting at 250 m, with at least 700 m between rocket opportunities. Ride the ramp to collect one. Ordinary ramps retain their original three-second boost and five-seed trail.
 - Rockets unfold the original model's wings and provide five seconds of flight, including smooth ascent and descent. A single trail contains 18 airborne seeds worth three points each (54 points). It either stays in the launch lane or hands over to one adjacent lane after nine seeds, with a 0.63-second gap for steering. Timed contact keeps the trail reachable across speed changes. Flight is 1.25× base speed, freezes on pause and finishes with a short protected landing. Sheep still require the bell; a blocking flock ends flight and waits for the bell.
-- T or Trick performs a 0.6-second barrel roll when sufficient airtime remains. One trick per normal jump, or up to three per rocket flight. Each completed trick grants ten bankable seeds on a safe landing. Crashing forfeits unbanked trick bonuses.
+- The original air-trick control was replaced by the single-use superboost in v12.
 - Fork gates start around 600 m and recur after 1,100–1,450 m. Steer through the left gate for a calm route or right for an adventure route; the route buttons also select the lane. Center defaults to calm. Both variants last twelve active seconds. Calm routes space rows 35% farther apart and halve the double-obstacle probability. Adventure routes space them 15% closer, increase double-obstacle probability by 25%, and provide extra ramps and longer reward trails. Base progression remains unchanged.
 - Occasional pickups offer an eight-second magnet (gold seeds only, within reach vertically, drawn to the chicken along a visible 0.48-second arc), a twelve-second bubble that absorbs one collision, or five seconds at 65% current speed. Powers refresh their own duration, coexist, and pause with gameplay. Sheep still require R.
 - Earned seeds are also added once to an independent browser-local equipment bank. Cosmetic red/gold helmets and blue/pink bicycles cost 80/220 and 120/180 seeds respectively. Unlocked items can be equipped freely. Purchases do not subtract from the current run's score. Opening equipment pauses an active ride; closing restores its previous state. Purchases and colors survive restarts/reloads; storage failures are explained in the equipment panel.
-- Automated checks cover prior gameplay plus five-second flight, reachable rewards at several speed tiers, tricks and safe landing, rocket rarity/cooldown, keyboard reversal, power effects, route choice, and equipment transactions and pause behavior. No browser visual QA was requested or performed.
+- Automated checks cover prior gameplay plus five-second flight, reachable rewards at several speed tiers, rocket rarity/cooldown, keyboard reversal, power effects, route choice, and equipment transactions and pause behavior. No browser visual QA was requested or performed.
 
 ## Flight and feedback adjustments (v11)
 
@@ -53,3 +53,19 @@ Obstacle rows get gradually closer with distance, but spacing is now 18 + 16 / (
 - Magnet pickup adds animated pink rings around the chicken. Nearby gold seeds visibly accelerate along an arc toward the chicken's actual world position and award points only when they arrive. Black seeds remain unaffected. Attraction already in progress finishes even if the magnet expires; pausing freezes it.
 - After the third ordinary crash, a separate 3D results scene shows the original chicken standing without its bike, with a gauze bandage around the left knee, a crutch, and a helmet with fracture lines and a missing shell section. The equipped helmet color is retained. Final seed points and distance remain visible beside it on desktop and below it on mobile. The damaged mesh is isolated from the riding model, so a new ride begins intact.
 - Checks cover sequential trail generation and actual lane-switch collection, sheep penalties and bouncing particles, timely bell avoidance, magnet travel and scoring, and the actual GLB recovery scene with isolated helmet damage. No browser visual QA was requested or performed.
+
+
+## Poängtavla och superboost (v12)
+
+- Topplista: skriv ett namn efter game over. Spelet fyller automatiskt i frön och meter från den avslutade rundan. Flest frön rankas först, sedan längst sträcka; högst 100 resultat. En runda kan bara registreras en gång. Resultaten sparas lokalt i webbläsaren, inte i en gemensam databas för olika enheter.
+- Ringklocka: dubbeltryck med ett finger på spelplanen på mobil. R och Ring-knappen finns kvar. Svep, långtryck och tryck på menyer räknas inte som dubbeltryck.
+- Slutskärmen speglar vald hjälm och visar den valda cykeln bredvid den stående kycklingen. Bandage, krycka och skadad hjälm finns kvar.
+- Orange markering visar förra avslutade rundans slut; turkos markering visar längdrekordet vid starten av den aktuella rundan. Meter och avstånd kvar visas när markeringarna närmar sig. Båda sparas på samma enhet.
+- Trick är borttaget. Boost-knappen eller B ger 4 aktiva sekunder med 1,65× fart, skydd mot hinder och får samt animerad magnet för gula frön i alla tre filer, även luftfrön. Svarta frön ger ingen omvänd styrning under boosten. En användning per ny runda; paus fryser tiden. Vanliga rampboostar är separata.
+
+### Publicera denna uppdatering
+
+GitHub-repot använder `main` och publicerar `kycklingcykeln-github/dist` via den befintliga `.github/workflows/pages.yml`.
+Packa upp uppdateringsfilen och ladda upp den medföljande mappen `kycklingcykeln-github` i repots rot, så att befintliga filer ersätts. Skapa inte en extra överordnad mapp. Behåll den befintliga workflow-filen. Commit på `main` startar GitHub Pages-jobbet; kontrollera att det blir grönt under Actions.
+
+Verifierat med `node tests/gameplay.mjs`: tidigare regler, exakt boosttid inklusive paus/omstart, flera kollisioner/får, magnetinsamling, touchgester, namnhantering och sortering, sparfel, rekordmarkeringar samt material på den riktiga GLB-modellen. Ingen visuell webbläsargranskning är utförd.
