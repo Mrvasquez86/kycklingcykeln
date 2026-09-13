@@ -18,7 +18,7 @@ function jump(){if(state!=='playing'||jumpHeight>0||jumpVelocity>0)return;rampRi
 let reverseTime=0,bellCooldown=0,awaitingFlock=null,nextSheepDistance=400,lastRowDouble=false;
 let boostTime=0,rampRide=null,rowCount=0,skySun,skyMoon,stars,ambientLight,sunLight,fillLight,headlight,lampLens,cloudMaterial;
 let audioContext=null,highscore=readHighscore(),recordToBeat=highscore,recordRang=false,lastSavedHighscore=highscore;
-const BOOST_DURATION=3,BOOST_FACTOR=1.65,HIGHSCORE_KEY='kycklingcykeln.highscore.meters';
+const BOOST_DURATION=3,BOOST_FACTOR=1.65,SUPER_BOOST_FACTOR=4,HIGHSCORE_KEY='kycklingcykeln.highscore.meters';
 // The supplied track uses its own gain, independently of the bicycle bell.
 const backgroundMusic=$('background-music');
 let musicEnabled=true,musicVolume=.35,musicGain=null,musicSource=null;
@@ -334,7 +334,7 @@ function tickGame(dt){
  if(superBoostTime>0&&dt>superBoostTime){const remaining=superBoostTime;tickGame(remaining);if(state==='playing')tickGame(dt-remaining);return;}
  elapsed+=dt;recoveryTime+=dt;tickPowers(dt);bellCooldown=Math.max(0,bellCooldown-dt);reverseTime=Math.max(0,reverseTime-dt);if(reverseTime<1e-8)reverseTime=0;
  boostTime=Math.max(0,boostTime-dt);if(boostTime<1e-8)boostTime=0;
- const targetSpeed=speedAtDistance(distance);speed=targetSpeed*(superBoostTime>0?BOOST_FACTOR:rocketTime>0?1.25:boostTime>0?BOOST_FACTOR:1)*(slowTime>0?.65:1)*Math.min(1,.35+recoveryTime/1.25*.65);
+ const targetSpeed=speedAtDistance(distance);speed=targetSpeed*(superBoostTime>0?SUPER_BOOST_FACTOR:rocketTime>0?1.25:boostTime>0?BOOST_FACTOR:1)*(slowTime>0?.65:1)*Math.min(1,.35+recoveryTime/1.25*.65);
  const blockingFlock=items.filter(i=>i.type==='flock'&&!i.passed&&!i.clearing).sort((a,b)=>b.object.position.z-a.object.position.z)[0];
  let stoppedForSheep=false;
  if(blockingFlock&&superBoostTime<=0){const remaining=Math.max(0,-1.2-blockingFlock.object.position.z);if(speed*dt>=remaining){speed=remaining/dt;stoppedForSheep=true;}}
@@ -563,7 +563,7 @@ function updateForks(){for(const item of items){if(item.type!=='fork'||item.pass
 function updateAdventureHud(){
  const active=['playing','sheep','crashing','paused'].includes(state);
  $('flight-status').hidden=!active||rocketTime<=0;$('flight-status').textContent='RAKET · '+rocketTime.toFixed(1)+' s · luftfrön ger 3 poäng';
- const powers=[superBoostTime>0?'SUPERBOOST '+superBoostTime.toFixed(1)+' s · Skydd + magnet':'',magnetTime>0?'Magnet '+magnetTime.toFixed(1)+' s':'',shieldTime>0?'Skydd '+shieldTime.toFixed(1)+' s':'',slowTime>0?'Slowmotion '+slowTime.toFixed(1)+' s':'',routeTime>0?(route==='calm'?'Lugna vägen ':'Äventyrsvägen ')+routeTime.toFixed(0)+' s':''].filter(Boolean);
+ const powers=[superBoostTime>0?'SUPERBOOST 4× · '+superBoostTime.toFixed(1)+' s · Skydd + magnet':'',magnetTime>0?'Magnet '+magnetTime.toFixed(1)+' s':'',shieldTime>0?'Skydd '+shieldTime.toFixed(1)+' s':'',slowTime>0?'Slowmotion '+slowTime.toFixed(1)+' s':'',routeTime>0?(route==='calm'?'Lugna vägen ':'Äventyrsvägen ')+routeTime.toFixed(0)+' s':''].filter(Boolean);
  $('power-status').hidden=!active||powers.length===0;$('power-status').textContent=powers.join(' · ');
  $('super-boost').disabled=!['playing','sheep'].includes(state)||superBoostUsed;
  $('super-boost').textContent=superBoostTime>0?'Boost '+superBoostTime.toFixed(1)+' s':superBoostUsed?'Använd':'Boost B';
@@ -669,7 +669,7 @@ function activateSuperBoost(){
  superBoostUsed=true;superBoostTime=4;reverseTime=0;
  clearBoostSheep();
  if(state==='sheep'){awaitingFlock=null;state='playing';recoveryTime=2;setPanels();}
- updateFlightVisuals(0);updateHud();notify('Superboost! Skydd + frömagnet i 4 sekunder.');return true;
+ updateFlightVisuals(0);updateHud();notify('Superboost! 4× fart + skydd och magnet i 4 sekunder.');return true;
 }
 function clearBoostSheep(){
  if(superBoostTime<=0)return;

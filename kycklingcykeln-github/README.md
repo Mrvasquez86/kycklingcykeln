@@ -61,7 +61,7 @@ Obstacle rows get gradually closer with distance, but spacing is now 18 + 16 / (
 - Ringklocka: dubbeltryck med ett finger på spelplanen på mobil. R och Ring-knappen finns kvar. Svep, långtryck och tryck på menyer räknas inte som dubbeltryck.
 - Slutskärmen speglar vald hjälm och visar den valda cykeln bredvid den stående kycklingen. Bandage, krycka och skadad hjälm finns kvar.
 - Orange markering visar förra avslutade rundans slut; turkos markering visar längdrekordet vid starten av den aktuella rundan. Meter och avstånd kvar visas när markeringarna närmar sig. Båda sparas på samma enhet.
-- Trick är borttaget. Boost-knappen eller B ger 4 aktiva sekunder med 1,65× fart, skydd mot hinder och får samt animerad magnet för gula frön i alla tre filer, även luftfrön. Svarta frön ger ingen omvänd styrning under boosten. En användning per ny runda; paus fryser tiden. Vanliga rampboostar är separata.
+- Trick är borttaget. Boost-knappen eller B ger 4 aktiva sekunder med 4× fart, skydd mot hinder och får samt animerad magnet för gula frön i alla tre filer, även luftfrön. Svarta frön ger ingen omvänd styrning under boosten. En användning per ny runda; paus fryser tiden. Vanliga rampboostar är separata.
 
 ### Publicera denna uppdatering
 
@@ -69,3 +69,7 @@ GitHub-repot använder `main` och publicerar `kycklingcykeln-github/dist` via de
 Packa upp uppdateringsfilen och ladda upp den medföljande mappen `kycklingcykeln-github` i repots rot, så att befintliga filer ersätts. Skapa inte en extra överordnad mapp. Behåll den befintliga workflow-filen. Commit på `main` startar GitHub Pages-jobbet; kontrollera att det blir grönt under Actions.
 
 Verifierat med `node tests/gameplay.mjs`: tidigare regler, exakt boosttid inklusive paus/omstart, flera kollisioner/får, magnetinsamling, touchgester, namnhantering och sortering, sparfel, rekordmarkeringar samt material på den riktiga GLB-modellen. Ingen visuell webbläsargranskning är utförd.
+
+## Starkare superboost (v13)
+
+Knappens boost ger nu 4× aktuell grundfart i stället för 1,65×. Fyra aktiva sekunder, engångsanvändning, skydd och frömagnet finns kvar. Rampens separata boost är fortfarande 1,65×.

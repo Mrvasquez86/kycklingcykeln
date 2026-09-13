@@ -221,7 +221,7 @@ run('start();');assert.equal(elements.get('end-character').hidden,true);assert.e
 console.log('Passed: sequential flight trails and lane handover, one-time sheep loss and bouncing seeds, visible magnet travel and one-time scoring, real-model recovery scene, damaged helmet isolation and clean restart.');
 // Single-use protection covers sheep and multiple obstacles for exactly four active seconds.
 reset();run('shieldTime=8;seeds=80;createFlock(-2);createObstacle(0,1.5,0);createBoulder(0,1.5);activateSuperBoost();tickGame(.01);');
-assert.equal(run('falls'),0);assert.equal(run('state'),'playing');assert.equal(run('seeds'),80);assert.ok(run('shieldTime')>7);assert.equal(run('activateSuperBoost()'),false);
+assert.equal(run('speed'),run('speedAtDistance(distance)*4'));assert.equal(run('falls'),0);assert.equal(run('state'),'playing');assert.equal(run('seeds'),80);assert.ok(run('shieldTime')>7);assert.equal(run('activateSuperBoost()'),false);
 run('pause();tickGame(1);');assert.equal(run('superBoostTime'),3.99);run('pause();');
 run('tickGame(3.98);');assert.ok(run('superBoostTime')>0);run('tickGame(.02);');assert.equal(run('superBoostTime'),0);assert.equal(run('superBoostUsed'),true);
 run('shieldTime=0;invulnerable=0;createObstacle(0,1.5,0);tickGame(.01);');assert.equal(run('falls'),1);
